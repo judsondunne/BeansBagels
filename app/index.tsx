@@ -3,7 +3,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 
 const index = () => {
-    return <Redirect href="home"/>
+    return <Redirect href="signUp"/>
 };
 
 export default index;

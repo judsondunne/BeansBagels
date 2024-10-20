@@ -1,0 +1,203 @@
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Image, // Import Linking for deep links
+} from "react-native";
+import { useRouter } from "expo-router";
+import { collection, getDocs } from "firebase/firestore";
+import { firestore } from "../app/config/firebase";
+import { useAuth } from "../app/contexts/authContext";
+
+const BEC = require("../assets/BEC.png");
+
+const Menu = () => {
+  const { userData } = useAuth(); // Access user data from context
+  const [users, setUsers] = useState([]); // State to hold users data
+  const [loading, setLoading] = useState(true); // State to handle loading
+  const [error, setError] = useState(null); // State to handle errors
+  const [favBagel, setFavBagel] = useState(null); // State to store the favBagel of the logged-in user
+  const router = useRouter();
+
+  useEffect(() => {
+    // Fetch users from Firestore when component mounts
+    const fetchUsers = async () => {
+      try {
+        const usersCollection = collection(firestore, "users");
+        const usersSnapshot = await getDocs(usersCollection);
+        const usersList = usersSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setUsers(usersList);
+
+        // Find the user that matches the currently logged-in username
+        const currentUser = usersList.find(user => user.username === userData?.username);
+        
+        if (currentUser) {
+          setFavBagel(currentUser.favBagel); // Set the favBagel if the user is found
+        }
+      } catch (err) {
+        console.error("Error fetching users:", err);
+        setError(err);
+        Alert.alert("Error", "Failed to fetch users. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [userData?.username]);
+
+  // Function to handle Venmo payment deep link
+  const sendMoneyViaVenmo = (amount, venmoUsername) => {
+    const venmoLink = `venmo://paycharge?txn=pay&recipients=${venmoUsername}&amount=${amount}&note=Payment`;
+
+    // Check if Venmo app is installed
+    Linking.canOpenURL(venmoLink)
+      .then((supported) => {
+        if (!supported) {
+          Alert.alert("Venmo not installed", "Please install the Venmo app to send money.");
+        } else {
+          return Linking.openURL(venmoLink);
+        }
+      })
+      .catch((err) => console.error("Error opening Venmo:", err));
+  };
+
+  const renderItem = ({ item }) => (
+    <View style={styles.userItem}>
+      <Text style={styles.username}>{item.username}</Text>
+      {/* Send money button */}
+      <TouchableOpacity
+        style={styles.venmoButton}
+        onPress={() => sendMoneyViaVenmo(5.00, item.venmoUsername)} // Example to send $5.00
+      >
+        <Text style={styles.venmoButtonText}>Send $5 via Venmo</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* Show the currently logged-in user's favBagel */}
+      {favBagel && (
+        <View style={styles.favBagelContainer}>
+          <Text style={styles.favBagelText}>Your Favorite Bagel: {favBagel}</Text>
+        </View>
+      )}
+
+    <Image
+  source={BEC}
+  style={{ width: 200, height: 200 }}
+  onError={() => console.log("Error loading image")}
+/>
+
+
+      {/* Menu Title */}
+      <Text style={styles.menuTitle}>Menu</Text>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Users List */}
+      <Text style={styles.usersTitle}>All Users:</Text>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#070707" style={styles.loader} />
+      ) : error ? (
+        <Text style={styles.errorText}>Failed to load users.</Text>
+      ) : users.length === 0 ? (
+        <Text style={styles.noUsersText}>No users found.</Text>
+      ) : (
+        <FlatList
+          data={users}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+        />
+      )}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "#fff",
+  },
+  favBagelContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  favBagelText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  menuTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginTop: 30,
+    textAlign: "center",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#ccc",
+    marginVertical: 20,
+  },
+  usersTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  loader: {
+    marginTop: 20,
+  },
+  errorText: {
+    color: "red",
+    textAlign: "center",
+    marginTop: 20,
+  },
+  noUsersText: {
+    textAlign: "center",
+    color: "#666",
+    marginTop: 20,
+  },
+  list: {
+    paddingBottom: 20,
+  },
+  userItem: {
+    padding: 15,
+    backgroundColor: "#EBEAEA",
+    borderRadius: 7,
+    marginBottom: 10,
+  },
+  username: {
+    fontSize: 16,
+    color: "#333",
+  },
+  venmoButton: {
+    marginTop: 10,
+    backgroundColor: "#0074D9",
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+  },
+  venmoButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+});
+
+export default Menu;
